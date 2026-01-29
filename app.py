@@ -1,6 +1,8 @@
 import streamlit as st
 import json
 import os
+import subprocess
+subprocess.run(["playwright", "install", "chromium"])
 from urllib.parse import urlparse
 from playwright.sync_api import sync_playwright
 
