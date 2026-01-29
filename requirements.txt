@@ -1,0 +1,4 @@
+streamlit
+playwright
+readability-lxml
+beautifulsoup4
