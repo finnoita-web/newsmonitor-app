@@ -1,8 +1,6 @@
 import streamlit as st
 import json
 import os
-import subprocess
-subprocess.run(["playwright", "install", "chromium"])
 from urllib.parse import urlparse
 from playwright.sync_api import sync_playwright
 
@@ -226,34 +224,88 @@ def fetch_article_html(url):
 # -----------------------------
 st.title("📰 News Monitor (ISP‑Bypass Mode)")
 
-urls = load_json(URLS_FILE, [])
+raw_urls = load_json(URLS_FILE, [])
+
+urls = []
+for item in raw_urls:
+    if isinstance(item, str):
+        urls.append({"url": item, "group": "General"})
+    else:
+        urls.append(item)
+
+
 state = load_json(STATE_FILE, {})
 
 # --- Add new URL ---
 st.subheader("Add a site to monitor")
+
 new_url = st.text_input("Enter news URL")
+new_group = st.text_input("Group (e.g., Tech, Economy, Weird)", value="General")
 
 if st.button("Add URL"):
-    if new_url and new_url not in urls:
-        urls.append(new_url)
+    if new_url and not any(u["url"] == new_url for u in urls):
+        urls.append({"url": new_url, "group": new_group})
         save_json(URLS_FILE, urls)
-        st.success("Added!")
+        st.success(f"Added to group '{new_group}'")
     else:
         st.warning("URL already exists or empty")
 
 # --- List monitored URLs ---
 st.subheader("Monitored sites")
-for u in urls:
-    st.write("•", u)
+
+groups = sorted(set(u["group"] for u in urls))
+
+for g in groups:
+    with st.expander(f"📂 {g}"):
+        for i, entry in enumerate(urls):
+            if entry["group"] != g:
+                continue
+
+            col1, col2, col3 = st.columns([6, 2, 2])
+
+            with col1:
+                st.write(entry["url"])
+
+            # Edit group
+            with col2:
+                new_group = st.text_input(
+                    f"Group for {entry['url']}",
+                    value=entry["group"],
+                    key=f"group_edit_{entry['url']}"
+                )
+                if new_group != entry["group"]:
+                    entry["group"] = new_group
+                    save_json(URLS_FILE, urls)
+                    st.success(f"Updated group for {entry['url']}")
+
+            # Delete URL
+            with col3:
+                if st.button("🗑️", key=f"delete_{entry['url']}"):
+                    urls.remove(entry)
+                    save_json(URLS_FILE, urls)
+                    st.warning(f"Deleted {entry['url']}")
+                    st.experimental_rerun()
+
 
 # --- Check for updates ---
 st.subheader("Check for updates")
+
+selected_groups = st.multiselect(
+    "Choose groups to check",
+    options=groups,
+    default=groups
+)
+
 if st.button("Check now"):
     st.write("Checking…")
 
     new_articles_global = []
 
-    for url in urls:
+    for entry in urls:
+        if entry["group"] not in selected_groups:
+            continue
+
+        url = entry["url"]
         st.write(f"🔍 {url}")
         articles = fetch_links(url)
         if not articles:
